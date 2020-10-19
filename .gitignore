@@ -127,3 +127,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# downloaded files
+*.gz
+*.Z
+*.[0-9][0-9][nopdNPOD]
