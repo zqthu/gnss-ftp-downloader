@@ -1,42 +1,53 @@
-# coding = utf-8
+#!/usr/bin/python 
+# -*- coding: utf-8 -*-
 
 import os
 import threading
+import fcntl
 from queue import Queue
 from ftplib import FTP
-from gtime import GTime
+from gtime import GTime, GT_list
 
-# import logging
-# import time
-
-# logging settings
-# run_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
-# logging.basicConfig(level=logging.DEBUG, filename='{}.log'.format(run_time), filemode='a',
-#                     format= '%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s')
+import logging
+import time
 
 # gadgets
 def url_replace(to_replace, gt):
-    to_replace = to_replace.replace("YYYY",str(gt.year)).replace("DDD",str(gt.doy).zfill(3)).replace("YY",str(gt.year)[-2:])
+    to_replace = to_replace.replace("YYYY",str(gt.year)).replace("DDD",str(gt.doy).zfill(3)).replace("YY",str(gt.year)[-2:]).replace("MONTH",str(gt.month).zfill(2)[-2:])
     to_replace = to_replace.replace("HH",str(gt.hour).zfill(2)).replace("CH",gt.H).replace("MM",str(gt.min).zfill(2))
     to_replace = to_replace.replace("GPSTW",str(gt.gps_week).zfill(4)).replace("GPSTD",str(gt.gps_dow))
     to_replace = to_replace.replace("GPSLW",str((gt-1).gps_week).zfill(4)).replace("GPSLD",str((gt-1).gps_dow))
     return to_replace
 
-def gt_list(begin_gt, end_gt):
-    gtl = [begin_gt]
-    while begin_gt != end_gt:
-        begin_gt = begin_gt + 1
-        gtl.append(begin_gt)
-    return gtl
-
 class downloader(FTP):
-    def __init__(self, host='', user='', passwd='', acct='', ftp_num=1):
-        # super().__init__(host, user, passwd, acct)
+    """
+    downloader is a class: downloader(), inherited from ftplib.FTP()
+
+    Parameters
+    ----------
+    host, user, passwd, acct :  string
+        Inherited from FTP()
+    ftp_num : int, default 1
+        Numbers of downloading threads
+    log : bool, default True
+        Make a log
+    ----------
+
+    Method
+    ----------
+    download(self, pattern, dic={}, out='.', overwrite=False)
+        Download from ftp by url pattern and request dictionary
+    ----------
+
+    """
+    def __init__(self, host='', user='', passwd='', acct='', ftp_num=1, log=True):
+
         self.host = host
         self.user = user
         self.passwd = passwd
         self.acct = acct
         self.ftp_num = ftp_num
+        self.log = True
     
     def generate_urls(self, pattern, dic={}):
         # make url list by pattern and dic
@@ -53,10 +64,10 @@ class downloader(FTP):
                     for v in values:
                         url_tmp.append(url.replace(key, str(v).zfill(zfill_length)))
             url_list = url_tmp.copy()
-        return url_list
+        return list(set(url_list))
 
     def _download_url(self, ftp):
-        # download threads
+        # download url [call by threads]
         while True:
             url = self.queue.get()
             save = self.out + os.sep + url.split('/')[-1]
@@ -64,64 +75,92 @@ class downloader(FTP):
                 self.queue.task_done()
                 continue
             try:
-                ftp.retrbinary('RETR {}'.format(url), open(save, 'wb').write)
-                print('Downloaded {} -> {}'.format(url, save))
+                with open(save, 'wb') as f:
+                    fcntl.flock(f,fcntl.LOCK_EX | fcntl.LOCK_NB) # lock file
+                    ftp.retrbinary('RETR {}'.format(url), f.write)
+                    fcntl.flock(f,fcntl.LOCK_UN) # release lock
+                    f.close()
+                print('{} -> {}'.format(url, save))
             except:
-                print('Error when downloading {}'.format(url))
-                # logging.warning('Error when downloading {}'.format(url))
-                os.remove(save)
+                print('Error when downloading {} -> {}'.format(url, save))
+                if self.log:
+                    logging.warning('Error when downloading {} -> {}'.format(url, save))
+                if os.path.getsize(save) == 0:
+                    # remove 0 size file
+                    os.remove(save)
             self.queue.task_done()
 
-    def download(self, urls, out='.', overwrite=False):
-        # download by muti-threading
-
+    def download_by_urls(self, urls, out='.', overwrite=False):
+        # download url list by muti-threading
         if isinstance(urls, str):
             urls = [urls] # change to list
         self.out = os.path.realpath(out)
         self.overwrite = overwrite
-        
+        # threads list and queue
         thread_list = []
         ftp_list = []
         self.queue = Queue()
-
         # put urls to queue
         for url in urls:
             self.queue.put(url)
-
         # ftp login
         for i in range(self.ftp_num):
             f = FTP(host=self.host, user=self.user, passwd=self.passwd, acct=self.acct)
             f.login()
             ftp_list.append(f)
-
         # start threads
         for i in range(self.ftp_num):
             t_parse = threading.Thread(target=self._download_url, args=(ftp_list[i],))
             thread_list.append(t_parse)
             t_parse.setDaemon(True)
             t_parse.start()
-        
         # wait until all tasks done
         self.queue.join()
-
         # ftp bye
         for f in ftp_list:
             f.quit()
-            
         return
+
+    def download(self, pattern, dic={}, out='.', overwrite=False):
+        """
+        Download from ftp by url pattern and request dictionary
+
+        Parameters
+        ----------
+        pattern : string
+            URL pattern string, starting from '/'
+            Note that there are some patterns kept for special use [see url_replace()]:
+                1. 'YYYY': 4-char year generated by GTime list
+                2. 'YY': 2-char year generated by GTime list
+                3. 'DDD': 3-char day of year (doy) generated by GTime list
+                4. 'MONTH': 2-char month generated by GTime list
+                5. 'HH': 2-char hour generated by GTime list
+                6. 'CH': 1-char hour generated by GTime list
+                7. 'MM': 2-char minute generated by GTime list
+                8. 'GPSTW': 4-char GPS week generated by GTime list
+                9. 'GPSTD': 1-char GPS day of week generated by GTime list
+        dic : dictionary
+            Replace the keys in pattern string with values
+            Note that there are some keys kept for special use:
+                1. 'GTIME' : GTime list
+        out : string, default '.'(current directory)
+            Output directory
+        overwrite: bool, default False
+            Overwrite existing file
+        ----------
+        """
+        # check output directory
+        out_dir = os.path.realpath(out) + os.sep
+        if not os.path.exists(out_dir):
+            os.mkdir(out_dir)
+        # logging settings
+        if self.log:
+            run_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+            logging.basicConfig(level=logging.DEBUG, filename='{}{}.log'.format(out_dir, run_time), filemode='a',
+                                format= '%(asctime)s - %(pathname)s[line:%(lineno)d] - %(levelname)s: %(message)s')
+        # download
+        url_list = self.generate_urls(pattern, dic)
+        self.download_by_urls(url_list, out_dir, overwrite)
     
 if __name__ == "__main__":
-    ftp = downloader('ftp.geodetic.gov.hk', ftp_num=30)
-
-    # GTime list
-    gtl = gt_list(GTime(year=2013,doy=1), GTime(year=2013,doy=365))
-    # sites
-    sites = ['hkcl', 'hkks', 'hkkt', 'hklm', 'hklt', 'hkmw', 'hknp', 'hkoh', 'hkpc', 'hkqt', 'hksc', 'hksl', 'hkss', 'hkst', 'hktk', 'hkws', 'kyc1', 't430']
-
-    # dict
-    d = {   'GTIME': gtl,
-            'SSSS': sites
-    }
-    url_list = ftp.generate_urls(pattern='/rinex2/YYYY/DDD/SSSS/30s/SSSSDDD0.YYd.gz',dic=d)
-    # print(url_list)
-    ftp.download(url_list, out='/mnt/e/20201018HKCORS')
+    pass

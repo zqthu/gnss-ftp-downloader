@@ -4,6 +4,13 @@
 from dataclasses import dataclass, field
 from gtime_conv import *
 
+def GT_list(begin_gt, end_gt):
+    gtl = [begin_gt]
+    while begin_gt != end_gt:
+        begin_gt = begin_gt + 1
+        gtl.append(begin_gt)
+    return gtl
+
 @dataclass(order=True)
 class GTime():
     """
