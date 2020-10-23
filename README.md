@@ -6,7 +6,8 @@
 - See examples in [quick_start.py](./quick_start.py)
 
 ## Requirements
-- None
+- **Unix by now**
+- python
 
 ## License
 - [MIT](./LICENSE)
