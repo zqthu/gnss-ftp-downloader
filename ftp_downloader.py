@@ -80,7 +80,7 @@ class downloader(FTP):
                     ftp.retrbinary('RETR {}'.format(url), f.write)
                     fcntl.flock(f,fcntl.LOCK_UN) # release lock
                     f.close()
-                print('{} -> {}'.format(url, save))
+                # print('{} -> {}'.format(url, save))
             except:
                 print('Error when downloading {} -> {}'.format(url, save))
                 if self.log:
@@ -103,11 +103,13 @@ class downloader(FTP):
         # put urls to queue
         for url in urls:
             self.queue.put(url)
+        print('All URL generated')
         # ftp login
         for i in range(self.ftp_num):
             f = FTP(host=self.host, user=self.user, passwd=self.passwd, acct=self.acct)
             f.login()
             ftp_list.append(f)
+        print('Downloading...')
         # start threads
         for i in range(self.ftp_num):
             t_parse = threading.Thread(target=self._download_url, args=(ftp_list[i],))

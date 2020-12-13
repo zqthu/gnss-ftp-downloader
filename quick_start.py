@@ -48,7 +48,7 @@ def example_2():
     ftp = downloader('ftp.geodetic.gov.hk', ftp_num=10)
     # 2. Make the request dictionary
     #    GNSS Time list
-    gtl = GT_list(GTime(year=2019,doy=1), GTime(year=2019,doy=3))
+    gtl = GT_list(GTime(year=2018,doy=68), GTime(year=2018,doy=68))
     #   Sites
     sites = ['hkcl', 'hkks', 'hkkt', 'hklm', 'hklt', 'hkmw', 'hknp', 'hkoh', 'hkpc', 'hkqt', 'hksc', 'hksl', 'hkss', 'hkst', 'hktk', 'hkws', 'kyc1', 't430']
     #    Make request dict
@@ -59,9 +59,9 @@ def example_2():
     # 3. URL pattern
     p='/rinex2/YYYY/DDD/SSSS/5s/SSSSDDD0.YYd.gz'
     # 4. Output directory (optional)
-    out_dir = 'HK2017'
+    out_dir = '/mnt/e/20201018HKCORS/5s/2018'
     # 5. Start downloading
-    ftp.download(pattern=p,dic=d, out=out_dir)
+    ftp.download(pattern=p,dic=d, out=out_dir, overwrite=True)
 
 def example_3():
     """
@@ -83,7 +83,7 @@ def example_3():
     ftp = downloader('ftp.aiub.unibe.ch', ftp_num=20)
     # 2. Make the request dictionary
     #    GNSS Time list
-    gtl = GT_list(GTime(year=2017,doy=1), GTime(year=2017,doy=2))
+    gtl = GT_list(GTime(year=2013,doy=1), GTime(year=2013,doy=365))
     #    File names
     fnames = ['CODGPSTWGPSTD.CLK.Z','CODGPSTWGPSTD.EPH.Z','CODGPSTWGPSTD.ERP.Z','P1C1YYMONTH.DCB.Z','P1P2YYMONTH.DCB.Z','CODGPSTWGPSTD.ION.Z']
     #    Make request dict
@@ -94,12 +94,12 @@ def example_3():
     # 3. URL pattern
     p = '/CODE/YYYY/FNAMES'
     # 4. Output directory (optional)
-    out_dir = 'cod'
+    out_dir = '/mnt/e/20201018HKCORS/COD'
     # 5. Start downloading
     ftp.download(pattern=p,dic=d, out=out_dir)
 
 
 if __name__ == "__main__":
-    example_1()
+    # example_1()
     # example_2()
-    # example_3()
+    example_3()
